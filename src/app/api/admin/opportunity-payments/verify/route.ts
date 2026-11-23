@@ -1,0 +1,320 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { sequelize, connectDB } from '@/lib/sequelize';
+import { QueryTypes } from 'sequelize';
+import { notifyUser } from '@/lib/notify';
+import { resolveBranchCurrency } from '@/lib/branchCurrency';
+import { formatDocumentNumber } from '@/lib/documentNumbering';
+import { requireAuth, isAuthError } from '@/lib/apiAuth';
+import { logAudit } from '@/lib/auditLog';
+import { captureError } from '@/lib/errorTracking';
+import { checkRateLimit, recordFailedAttempt } from '@/lib/rateLimiter';
+
+let dbInitialized = false;
+const ensureDB = async () => { if (!dbInitialized) { await connectDB(); dbInitialized = true; } };
+
+export async function PUT(request: NextRequest) {
+  try {
+    // This is the Accounts sign-off that advances finance_status to
+    // 'approved' on crm_opportunity_workflow_reviews (see below) — one of the
+    // two gates isFinanceAndComplianceApproved() relies on before an
+    // opportunity can be marked won. It previously computed currentUser via
+    // verifyToken() but never checked the result, so an unauthenticated
+    // caller could verify any payment and forge that approval outright.
+    const auth = requireAuth(request, ['finance.view', 'finance.manage', 'payments.view']);
+    if (isAuthError(auth)) return auth;
+    const currentUser = auth;
+
+    // Throttle by the accountant's own id - this guards against a
+    // compromised/scripted session mass-verifying or mass-rejecting
+    // payments, not anonymous brute force.
+    const rateLimitKey = `payment-verify:${currentUser.id}`;
+    const rateLimit = await checkRateLimit(rateLimitKey, { windowMs: 15 * 60 * 1000, maxAttempts: 60 });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many payment reviews in a short time. Please try again in a few minutes.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+    await recordFailedAttempt(rateLimitKey, { windowMs: 15 * 60 * 1000 });
+
+    await ensureDB();
+    const body = await request.json();
+    const { paymentId, status, remarks } = body;
+
+    if (!paymentId || !status) {
+      return NextResponse.json({ error: 'paymentId and status are required' }, { status: 400 });
+    }
+
+    if (!['verified', 'rejected'].includes(status)) {
+      return NextResponse.json({ error: 'Status must be verified or rejected' }, { status: 400 });
+    }
+
+    const [linkedOpportunity] = await sequelize.query<{ isDeleted: number; accountantStatus: string | null }>(
+      `SELECT o.is_deleted AS isDeleted, COALESCE(p.accountantStatus, 'pending') AS accountantStatus
+       FROM crm_opportunity_payments p
+       LEFT JOIN crm_opportunities o ON o.id = p.opportunityId
+       WHERE p.id = :paymentId LIMIT 1`,
+      { replacements: { paymentId }, type: QueryTypes.SELECT }
+    );
+    if (!linkedOpportunity) {
+      return NextResponse.json({ error: 'Payment not found.' }, { status: 404 });
+    }
+    if (linkedOpportunity.isDeleted) {
+      return NextResponse.json({ error: 'This payment belongs to an opportunity that no longer exists.' }, { status: 409 });
+    }
+    // Without this, two Accounts reviewers (or one double-tapping / retrying after a
+    // timeout) can both act on the same payment - re-notifying the counselor, re-running
+    // the workflow-gate update, and even flipping an already-verified payment to rejected
+    // (or back) with no error either time.
+    if (linkedOpportunity.accountantStatus !== 'pending') {
+      return NextResponse.json({ error: `This payment was already ${linkedOpportunity.accountantStatus} - it can't be reviewed again.` }, { status: 409 });
+    }
+
+    let agreementNumber: string | null = null;
+
+    // Find the opportunity linked to this payment (needed both to auto-generate the
+    // agreement and to advance the finance gate on crm_opportunity_workflow_reviews below).
+    const [payment] = await sequelize.query<{ opportunityId: number; leadId: number | null; clientName: string; totalAmount: number; paidAmount: number; currency: string; assignedTo: number | null; leadAssignTo: number | null; branchId: number | null; serviceType: string | null }>(
+      `SELECT p.opportunityId, o.leadId,
+              COALESCE(p.clientName, CONCAT(l.fname,' ',COALESCE(l.lname,''))) AS clientName,
+              COALESCE(p.totalAmount,0) AS totalAmount,
+              COALESCE(p.paidAmount,0) AS paidAmount,
+              COALESCE(p.currency,'AED') AS currency,
+              o.assignedTo, l.assignTo AS leadAssignTo,
+              COALESCE(l.branch, o.branchId) AS branchId,
+              COALESCE(o.serviceType, o.serviceRequired) AS serviceType
+       FROM crm_opportunity_payments p
+       LEFT JOIN crm_opportunities o ON o.id = p.opportunityId
+       LEFT JOIN crm_forum_leads  l ON l.id = o.leadId
+       WHERE p.id = :paymentId LIMIT 1`,
+      { replacements: { paymentId }, type: QueryTypes.SELECT }
+    );
+
+    // Every write below succeeds or fails together. Before this, a failure
+    // after the payment UPDATE (e.g. the agreement INSERT) left the payment
+    // 'verified' with no agreement/finance-gate update, and the "already
+    // reviewed" guard then blocked any retry. The UPDATE itself is also the
+    // claim: it only matches a still-pending payment, so two reviewers racing
+    // past the read-check above can't both apply their decision.
+    const claimed = await sequelize.transaction(async (t) => {
+      const [, updateInfo] = await sequelize.query(
+        `UPDATE crm_opportunity_payments
+         SET accountantStatus = :status,
+             accountantRemarks = :remarks,
+             accountantId = :accountId,
+             accountantVerifiedAt = NOW(),
+             updatedAt = NOW()
+         WHERE id = :paymentId AND COALESCE(accountantStatus, 'pending') = 'pending'`,
+        {
+          replacements: { status, remarks: remarks || null, accountId: currentUser?.id || null, paymentId },
+          type: QueryTypes.UPDATE,
+          transaction: t,
+        }
+      );
+      if (Number((updateInfo as { affectedRows?: number })?.affectedRows ?? updateInfo ?? 0) < 1) return false;
+
+      // A rejected payment is money that never arrived, but it was already added to the paid/outstanding
+      // figures when it was recorded, so the balance stayed reduced (seen on crm_next: a rejected AED 3,000
+      // left 7,750 outstanding instead of 10,750, and the counselor could not collect it again). Put it back
+      // on the contract (the ledger the dashboards read) and, when this is the lead's own conversion-flow
+      // opportunity, on the lead's legacy columns too. Direct/contract-route payments never touched the
+      // lead columns, so those are left alone. (MySQL evaluates SET left to right.)
+      if (status === 'rejected' && payment?.opportunityId && Number(payment.paidAmount) > 0) {
+        await sequelize.query(
+          `UPDATE crm_contracts
+           SET paid_yet = GREATEST(paid_yet - :amount, 0),
+               pay_balance = GREATEST(pay_total - discount - paid_yet, 0), updated_at = NOW()
+           WHERE opportunity_id = :opportunityId AND is_deleted = 0`,
+          { replacements: { amount: Number(payment.paidAmount), opportunityId: payment.opportunityId }, type: QueryTypes.UPDATE, transaction: t }
+        );
+        if (payment.leadId) {
+          await sequelize.query(
+            `UPDATE crm_forum_leads
+             SET paidYet = GREATEST(COALESCE(paidYet, 0) - :amount, 0),
+                 payBalance = GREATEST(payTotal - paidYet, 0),
+                 demandAmt = payBalance
+             WHERE id = :leadId AND opportunity_id = :opportunityId`,
+            { replacements: { amount: Number(payment.paidAmount), leadId: payment.leadId, opportunityId: payment.opportunityId }, type: QueryTypes.UPDATE, transaction: t }
+          );
+        }
+      }
+
+      if (payment?.opportunityId) {
+        // The finance gate belongs to the OPPORTUNITY, not to this one payment. It used to be set
+        // straight from this payment's decision, so rejecting a later instalment flipped an
+        // opportunity whose first payment was already verified back to 'rejected'/'finance_review_failed'
+        // (seen on crm_next), and verifying a late instalment dragged a compliance-approved opportunity
+        // back to 'pending_compliance'. The page itself promises "at least one payment per opportunity
+        // marked Verified", so: approved if any payment is verified, rejected only if one is rejected
+        // and none verified, and the workflow only moves while it is still before compliance review.
+        const [counts] = await sequelize.query<{ verified: number; rejected: number }>(
+          `SELECT COALESCE(SUM(accountantStatus = 'verified'), 0) AS verified,
+                  COALESCE(SUM(accountantStatus = 'rejected'), 0) AS rejected
+           FROM crm_opportunity_payments WHERE opportunityId = :opportunityId`,
+          { replacements: { opportunityId: payment.opportunityId }, type: QueryTypes.SELECT, transaction: t }
+        );
+        const anyVerified = Number(counts?.verified || 0) > 0;
+        const financeStatus = anyVerified ? 'approved' : Number(counts?.rejected || 0) > 0 ? 'rejected' : 'pending';
+        const targetWorkflow = anyVerified ? 'pending_compliance' : financeStatus === 'rejected' ? 'finance_review_failed' : 'opportunity_created';
+        // Advance the finance gate so the client can eventually surface in the
+        // Client List, which reads crm_opportunity_workflow_reviews.finance_status/
+        // compliance_status directly (see src/app/api/admin/clients/route.ts).
+        await sequelize.query(
+          `UPDATE crm_opportunity_workflow_reviews
+           SET finance_status = :financeStatus,
+               finance_reviewed_by = :accountId,
+               finance_reviewed_at = NOW(),
+               workflow_status = CASE
+                 WHEN workflow_status IN ('opportunity_created', 'finance_review_failed', 'pending_compliance') THEN :workflowStatus
+                 ELSE workflow_status END,
+               updated_at = NOW()
+           WHERE opportunity_id = :opportunityId`,
+          {
+            replacements: {
+              financeStatus,
+              accountId: currentUser?.id || null,
+              workflowStatus: targetWorkflow,
+              opportunityId: payment.opportunityId,
+            },
+            type: QueryTypes.UPDATE,
+            transaction: t,
+          }
+        );
+      }
+
+      // When payment is verified, auto-generate an agreement number if one doesn't exist yet
+      if (status === 'verified') {
+        if (payment?.opportunityId) {
+          // Check if an agreement already exists for this opportunity
+          const [existing] = await sequelize.query<{ id: number; agreementNumber: string }>(
+            `SELECT id, agreementNumber FROM crm_opportunity_agreements WHERE opportunityId = :oppId AND is_deleted = 0 LIMIT 1`,
+            { replacements: { oppId: payment.opportunityId }, type: QueryTypes.SELECT, transaction: t }
+          );
+
+          if (existing) {
+            agreementNumber = existing.agreementNumber;
+          } else {
+            // Placeholder for the NOT NULL column — reformatted below once the
+            // row's own auto-increment id is known.
+            agreementNumber = `AGR-PENDING-${Date.now()}`;
+
+            const [insertId] = await sequelize.query(
+              `INSERT INTO crm_opportunity_agreements
+                 (opportunityId, agreementNumber, agreementType, title, status,
+                  clientName, totalAmount, currency, startDate, endDate,
+                  createdBy, uploadedBy, generatedDate, createdAt, updatedAt)
+               VALUES
+                 (:opportunityId, :agreementNumber, 'service_agreement',
+                  CONCAT('Service Agreement - ', :clientName),
+                  'generated',
+                  :clientName, :totalAmount, :currency,
+                  CURDATE(),
+                  DATE_ADD(CURDATE(), INTERVAL 1 YEAR),
+                  :createdBy, :createdBy, NOW(), NOW(), NOW())`,
+              {
+                replacements: {
+                  opportunityId: payment.opportunityId,
+                  agreementNumber,
+                  clientName: (payment.clientName || '').trim(),
+                  totalAmount: Number(payment.totalAmount || 0),
+                  currency: payment.currency || 'AED',
+                  createdBy: currentUser?.id || 1,
+                },
+                type: QueryTypes.INSERT,
+                transaction: t,
+              }
+            );
+
+            // AG/{branch}/{product}/{DDMMYYYY}/{seq}, e.g. AG/QTR/CAN/15072026/001.
+            const branchCurrency = await resolveBranchCurrency(payment.branchId);
+            agreementNumber = formatDocumentNumber({
+              prefix: 'AG',
+              branchName: branchCurrency?.branchName,
+              branchAddress: branchCurrency?.branchAddress,
+              branchAbbrv: branchCurrency?.branchAbbrv,
+              product: payment.serviceType,
+              sequenceId: Number(insertId),
+            });
+            await sequelize.query(
+              `UPDATE crm_opportunity_agreements SET agreementNumber = :agreementNumber WHERE id = :id`,
+              { replacements: { agreementNumber, id: Number(insertId) }, type: QueryTypes.UPDATE, transaction: t }
+            );
+
+            // Keep the legacy contract register (crm_forum_leads_contracts) in sync,
+            // matching the other two agreement-creation paths (lead-to-opportunity,
+            // receipts) so every agreement gets a contract number regardless of
+            // which flow generated it.
+            if (payment.leadId) {
+              await sequelize.query(
+                `INSERT INTO crm_forum_leads_contracts
+                   (leadId, contract, unsigned_contract, ar_contract, new_contract, garys,
+                    remarks, verify, verify_by, verify_date, batch_id, wp_batch_id,
+                    vendor_id, employer_id, old_crm_ag_id, payment_status)
+                 VALUES
+                   (:leadId, :contractFile, :unsignedFile, :arFile, NULL, NULL,
+                    :remarks, 0, 0, NULL, 0, 0,
+                    0, 0, 0, 1)`,
+                {
+                  replacements: {
+                    leadId: payment.leadId,
+                    contractFile: `${agreementNumber}.pdf`,
+                    unsignedFile: `unsigned_${agreementNumber}.pdf`,
+                    arFile: `ar_${agreementNumber}.pdf`,
+                    remarks: `Auto-created on payment verification. Agreement number: ${agreementNumber}`,
+                  },
+                  type: QueryTypes.INSERT,
+                  transaction: t,
+                }
+              );
+            }
+          }
+        }
+      }
+
+      return true;
+    });
+
+    if (!claimed) {
+      return NextResponse.json({ error: 'This payment was already reviewed by someone else, so it cannot be reviewed again.' }, { status: 409 });
+    }
+
+    await logAudit({
+      entityType: 'opportunity_payment',
+      entityId: paymentId,
+      action: status === 'verified' ? 'payment_verified' : 'payment_rejected',
+      summary: `Payment #${paymentId} ${status} by Accounts${remarks ? `: ${remarks}` : ''}`,
+      actorId: currentUser?.id ?? null,
+      actorRole: currentUser?.roleName || currentUser?.type || null,
+      after: { status, remarks: remarks || null },
+    });
+
+    // Let the counselor know Accounts reviewed their submission — the wizard's
+    // Accounts stage only shows this on-demand refresh, so without a
+    // notification a rejected payment can sit unnoticed indefinitely.
+    const counselorId = payment?.assignedTo || payment?.leadAssignTo;
+    if (counselorId) {
+      await notifyUser({
+        userId: counselorId,
+        type: 'payment_verification',
+        title: status === 'verified' ? 'Payment verified by Accounts' : 'Payment rejected by Accounts',
+        message: status === 'verified'
+          ? `Accounts verified the payment for ${payment?.clientName || `opportunity #${payment?.opportunityId}`}.`
+          : `Accounts rejected the payment for ${payment?.clientName || `opportunity #${payment?.opportunityId}`}.${remarks ? ` Remarks: ${remarks}` : ''}`,
+        priority: status === 'rejected' ? 'high' : 'medium',
+        link: payment?.leadId ? `/admin/leads/${payment.leadId}/edit` : undefined,
+        relatedId: payment?.leadId ?? undefined,
+        relatedType: payment?.leadId ? 'lead' : undefined,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Payment ${status} successfully`,
+      agreementNumber,
+    });
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    captureError(error, { route: 'PUT /api/admin/opportunity-payments/verify' });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

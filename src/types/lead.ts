@@ -1,0 +1,70 @@
+export interface Lead {
+  id: number;
+  fname: string;
+  mname: string;
+  lname: string;
+  email: string;
+  phone: string;
+  mobile: string;
+  whatsapp_number?: string | null;
+  additional_number?: string | null;
+  nationality: string;
+  address: string;
+  dob: string;
+  gender: string;
+  id_number: string;
+  id_expiry: string;
+  country_interest: string;
+  country_interest_label?: string;
+  service_interest: string;
+  service_interest_label?: string;
+  market_source: string;
+  market_source_label?: string;
+  meta_leadgen_id?: string | null;
+  meta_campaign_name?: string | null;
+  lead_score?: number | null;
+  lead_score_label?: 'Hot' | 'Warm' | 'Cold' | null;
+  lead_score_reasons?: string[] | string | null;
+  appointment: string;
+  followup: string;
+  folowuptime: string;
+  followupstat: number;
+  enquiry: string;
+  convet: string;
+  priority: string;
+  status: string;
+  regdate: string;
+  last_updated?: string | null;
+  last_updtd_time?: string | null;
+  // Most recent *approved* lead-reassignment date (crm_lead_reassignments),
+  // falling back to regdate for a lead that's never been reassigned - see
+  // the `assigned_date` subquery in src/app/api/leads/route.ts.
+  assigned_date?: string | null;
+  assignTo: number;
+  branch: number;
+  region: number;
+  payTotal: number;
+  paidYet: number;
+  payBalance: number;
+  lead_remark: string;
+  created: string;
+  lead_quality: string;
+  lead_type?: string | null;
+  campaign?: string;
+  latest_remark?: string;
+  latest_remark_id?: number;
+  agreementNumber?: string;
+  dmEmployeeByASSIGNTo?: { id: number; name: string };
+  dmEmployeeByCoUNSILOR?: { id: number; name: string };
+  dmBranch?: {
+    id: number;
+    name: string;
+    nameAr?: string | null;
+    address?: string | null;
+    email?: string | null;
+    mobile?: string | null;
+    licenseNumber?: string | null;
+    vatGstPercent?: number | string | null;
+    abbrv?: string | null;
+  };
+}

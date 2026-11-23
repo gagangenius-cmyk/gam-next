@@ -1,0 +1,130 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { authenticateUser, generateMfaPendingToken } from '@/lib/auth';
+import { checkRateLimit, recordFailedAttempt, clearRateLimit, getClientIp } from '@/lib/rateLimiter';
+import { isMfaEnabled } from '@/lib/mfa';
+import { captureError } from '@/lib/errorTracking';
+import { getAppSettings } from '@/lib/appSettings';
+import { clientIpFromHeaders, isIpAllowed } from '@/lib/clientNetwork';
+import { recordLoginEvent } from '@/lib/loginActivity';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { username, password } = await request.json();
+
+    if (!username || !password) {
+      return NextResponse.json(
+        { message: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
+
+    // Keyed on IP + username so one attacker spamming a username from
+    // elsewhere can't lock out the legitimate user, and a legitimate user's
+    // own mistyped attempts don't affect other accounts.
+    const rateLimitKey = `${getClientIp(request)}:${String(username).toLowerCase().trim()}`;
+    const rateLimit = await checkRateLimit(rateLimitKey);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { message: 'Too many login attempts. Please try again in a few minutes.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+      );
+    }
+
+    // Authenticate user using our auth system
+    const authUser = await authenticateUser(username, password);
+
+    const ip = clientIpFromHeaders(request.headers);
+    const userAgent = request.headers.get('user-agent');
+
+    if (!authUser) {
+      await recordLoginEvent({ username: String(username), event: 'login_failed', success: false, ip, userAgent, reason: 'Invalid credentials' });
+      await recordFailedAttempt(rateLimitKey);
+      return NextResponse.json(
+        { message: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+    await clearRateLimit(rateLimitKey);
+
+    // CEO-controlled "office Wi-Fi only" lock (Admin > Settings). CEO / Chairman accounts are exempt so the setting
+    // can always be switched off again; a misconfigured allow-list can therefore never lock everyone out.
+    try {
+      const settings = await getAppSettings();
+      const roleName = String(authUser.roleName || '').toLowerCase();
+      const exempt = roleName === 'ceo' || roleName.includes('chairman') || roleName.includes('founder');
+      if (settings['security.office_network_only'] === '1' && !exempt && !isIpAllowed(ip, settings['security.office_allowed_ips'])) {
+        await recordLoginEvent({ employeeId: authUser.id, username: String(username), event: 'blocked_network', success: false, ip, userAgent, reason: 'Outside office network' });
+        return NextResponse.json({ message: 'CRM access is limited to the office Wi-Fi network. Please connect to the office network and try again.' }, { status: 403 });
+      }
+    } catch (error) {
+      console.error('Office network check failed:', error);
+    }
+
+    // MFA-enrolled employees don't get the real session cookie yet — only a
+    // short-lived pending token naming who they are, which
+    // /api/auth/verify-mfa exchanges for the real one after a correct code.
+    // Employees who never enrolled (the default until they opt in from their
+    // profile) fall straight through to the unchanged response below, so
+    // rolling this out can't lock out or disrupt any existing login.
+    if (await isMfaEnabled(authUser.id).catch(() => false)) {
+      await recordLoginEvent({ employeeId: authUser.id, username: String(username), event: 'login', success: true, ip, userAgent, reason: 'Password accepted, awaiting MFA code' });
+      const pendingResponse = NextResponse.json({
+        mfaRequired: true,
+        message: 'Enter your authenticator app code to continue',
+      });
+      pendingResponse.cookies.set('mfa-pending-token', generateMfaPendingToken(authUser.id), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 5 * 60,
+      });
+      return pendingResponse;
+    }
+
+    await recordLoginEvent({ employeeId: authUser.id, username: String(username), event: 'login', success: true, ip, userAgent });
+
+    // Set HTTP-only cookie with token
+    const response = NextResponse.json({
+      message: 'Login successful',
+      user: {
+        id: authUser.id,
+        name: authUser.name,
+        email: authUser.email,
+        cemail: authUser.cemail,
+        role: authUser.role,
+        branch: authUser.branch,
+        region: authUser.region,
+        type: authUser.type,
+        roleName: authUser.roleName,
+        photo: authUser.photo,
+        wfh: authUser.wfh,
+        permissions: authUser.permissions,
+        mustChangePassword: authUser.mustChangePassword,
+      },
+    });
+
+    // Set token in HTTP-only cookie
+    response.cookies.set('auth-token', authUser.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60, // 24 hours
+    });
+
+    return response;
+  } catch (error) {
+    console.error('Login error:', error);
+    captureError(error, { route: 'POST /api/auth/login' });
+    return NextResponse.json(
+      { message: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET() {
+  return NextResponse.json(
+    { message: 'Method not allowed' },
+    { status: 405 }
+  );
+}

@@ -1,0 +1,464 @@
+@import "tailwindcss";
+
+:root {
+  /* ── Go Abroad Migration Brand Palette (from logo + goabroadmigration.com) ──
+     Extracted from the compass logo and the site's own warm/cream sections:
+       Compass navy        →  #9A6A2B
+       Compass red mark    →  #D9331E
+       Site amber accent   →  #C9964A
+       Site cream section  →  #F5F5DC
+       Peach page wash     →  #F6EDDC
+  ────────────────────────────────────────────────────────────────── */
+  --dmc-green:          #9A6A2B;   /* primary – compass navy                 */
+  --dmc-green-dark:     #6B4518;   /* deep navy / hover / sidebar header     */
+  --dmc-green-medium:   #B8873A;   /* mid navy – borders, secondary buttons  */
+  --dmc-green-light:    #D9B26A;   /* light navy tint / highlight            */
+  --dmc-green-soft:     #F6EDDC;   /* page & card background tint – peach    */
+  --dmc-green-softer:   #FBF8F2;   /* subtler surface bg – soft peach        */
+
+  /* Neutral / text */
+  --dmc-ink:            #1A1612;   /* primary text – warm charcoal navy      */
+  --dmc-muted:          #6B6155;   /* secondary text / labels                */
+  --dmc-border:         #E8DCC6;   /* borders – peach-tinted                 */
+  --dmc-surface:        #FFFFFF;   /* card / panel surface                   */
+
+  /* Semantic */
+  --dmc-red:            #D9331E;
+  --dmc-red-dark:       #B0241E;
+  --dmc-gold:           #C9964A;   /* accents / warning badges / active nav  */
+  --dmc-gold-soft:      #F3E3BE;
+
+  /* CSS-layer aliases (used by older components) */
+  --cmg-blue:           var(--dmc-green);
+  --cmg-blue-dark:      var(--dmc-green-dark);
+  --cmg-blue-soft:      var(--dmc-green-soft);
+  --cmg-red:            var(--dmc-red);
+  --cmg-red-dark:       var(--dmc-red-dark);
+  --cmg-ink:            var(--dmc-ink);
+  --cmg-muted:          var(--dmc-muted);
+  --cmg-border:         var(--dmc-border);
+  --cmg-surface:        var(--dmc-surface);
+
+  /* Page background */
+  --background:         var(--dmc-green-softer);
+  --foreground:         var(--dmc-ink);
+
+  /* ── shadcn/ui token bridge ───────────────────────────────────────
+     Input, Select (Radix) and a few other primitives are written
+     against the standard shadcn token names (border-input, ring-ring,
+     bg-popover, bg-accent, bg-muted, …). Those tokens were never
+     defined here, so every one of those utilities was a silent no-op —
+     Radix selects had no visible focus ring, no popover background, no
+     hover state. Wiring them to the brand palette makes every
+     shadcn-shaped component themed for free, with no per-file edits. */
+  --border:             var(--dmc-border);
+  --input:              var(--dmc-border);
+  --ring:               var(--dmc-green);
+  --card:               var(--dmc-surface);
+  --card-foreground:    var(--dmc-ink);
+  --popover:            var(--dmc-surface);
+  --popover-foreground: var(--dmc-ink);
+  --primary:            var(--dmc-green);
+  --primary-foreground: #FFFFFF;
+  --secondary:          var(--dmc-green-soft);
+  --secondary-foreground: var(--dmc-green);
+  --accent:             var(--dmc-green-soft);
+  --accent-foreground:  var(--dmc-green);
+  --muted:              var(--dmc-green-softer);
+  --muted-foreground:   var(--dmc-muted);
+  --destructive:        var(--dmc-red);
+  --destructive-foreground: #FFFFFF;
+  --radius:             0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --radius-sm: calc(var(--radius) - 0.375rem);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.25rem);
+
+  /* Brand-tinted elevation — every shadow-* utility in the app picks
+     this up automatically. Ink-tinted instead of pure black reads as
+     considerably more premium than the Tailwind default at the same
+     opacity, for zero per-component cost. */
+  --shadow-xs: 0 1px 2px 0 rgb(26 22 18 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(26 22 18 / 0.08), 0 1px 2px -1px rgb(26 22 18 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(26 22 18 / 0.08), 0 2px 4px -2px rgb(26 22 18 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(26 22 18 / 0.08), 0 4px 6px -4px rgb(26 22 18 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(26 22 18 / 0.10), 0 8px 10px -6px rgb(26 22 18 / 0.06);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.dm-form-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16) !important;
+}
+
+.dm-form-error-message {
+  animation: dm-form-error-in 140ms ease-out;
+}
+
+@keyframes dm-form-error-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+::selection {
+  background: rgba(154, 106, 43, 0.18);
+  color: var(--dmc-ink);
+}
+
+/* ── Page shell ─────────────────────────────────────────────────── */
+.cmg-page-shell {
+  background:
+    linear-gradient(180deg, rgba(251, 234, 224, 0.92), rgba(253, 243, 236, 0.98) 240px),
+    var(--background);
+}
+
+/* ── Card ───────────────────────────────────────────────────────── */
+.cmg-card {
+  background: var(--dmc-surface);
+  border: 1px solid var(--dmc-border);
+  box-shadow: 0 10px 30px rgba(44, 53, 63, 0.08);
+}
+
+/* ── Focus ring ─────────────────────────────────────────────────── */
+.cmg-focus { outline: none; }
+.cmg-focus:focus {
+  box-shadow: 0 0 0 3px rgba(154, 106, 43, 0.22);
+}
+
+/* ── Tailwind blue → Go Abroad Migration navy remaps ────────────────── */
+/* These override Tailwind's blue utilities so legacy JSX that still
+   uses e.g. "bg-blue-600" renders with the brand navy instead.     */
+.bg-blue-600  { background-color: var(--dmc-green) !important; }
+.bg-blue-700  { background-color: var(--dmc-green-medium) !important; }
+.bg-blue-800  { background-color: var(--dmc-green-dark) !important; }
+.bg-blue-50,
+.bg-blue-100  { background-color: var(--dmc-green-soft) !important; }
+.bg-blue-200  { background-color: #F5D9C6 !important; }
+
+.hover\:bg-blue-700:hover { background-color: var(--dmc-green-medium) !important; }
+.hover\:bg-blue-800:hover { background-color: var(--dmc-green-dark) !important; }
+.hover\:bg-blue-50:hover  { background-color: var(--dmc-green-soft) !important; }
+
+.text-blue-600 { color: var(--dmc-green) !important; }
+.text-blue-700,
+.text-blue-800,
+.text-blue-900 { color: var(--dmc-green-dark) !important; }
+
+.border-blue-200,
+.border-blue-300,
+.border-blue-400,
+.border-blue-500,
+.border-blue-600 { border-color: var(--dmc-border) !important; }
+
+/* Focus/hover border variants aren't covered by the plain classes above
+   (Tailwind compiles them to distinct `.focus\:border-blue-500:focus`
+   selectors) - without these, inputs using the common
+   `focus:border-blue-500 focus:ring-blue-500` pairing got a green focus
+   ring but kept Tailwind's actual blue border underneath. */
+.focus\:border-blue-500:focus,
+.focus\:border-blue-400:focus {
+  border-color: var(--dmc-green) !important;
+}
+
+.hover\:border-blue-300:hover,
+.hover\:border-blue-400:hover {
+  border-color: var(--dmc-green) !important;
+}
+
+.focus\:ring-blue-500:focus,
+.focus\:ring-blue-400:focus {
+  --tw-ring-color: rgba(154, 106, 43, 0.40) !important;
+}
+
+.ring-blue-500 { --tw-ring-color: rgba(154, 106, 43, 0.40) !important; }
+
+/* ── Indigo / violet → Go Abroad Migration navy remaps ──────────────── */
+.bg-indigo-600,
+.bg-indigo-700  { background-color: var(--dmc-green) !important; }
+.text-indigo-600,
+.text-indigo-700 { color: var(--dmc-green) !important; }
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+/* Wide enough (both axes) to see and grab without hunting for it —
+   6px was easy to miss entirely, especially the horizontal one on wide
+   tables (leads, invoices, reports, etc). */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--dmc-green-softer); }
+::-webkit-scrollbar-thumb {
+  background: #E8C29B;
+  border-radius: 6px;
+  border: 2px solid var(--dmc-green-softer);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--dmc-green-medium); }
+::-webkit-scrollbar-corner { background: var(--dmc-green-softer); }
+
+/* Firefox */
+* { scrollbar-width: auto; scrollbar-color: #E8C29B var(--dmc-green-softer); }
+
+/* ── Sidebar nav scrollbar (always visible, styled) ─────────────── */
+.sidebar-nav {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+.sidebar-nav::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar-nav::-webkit-scrollbar-track {
+  background: #FAF3EE;
+  border-radius: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: var(--dmc-border);
+  border-radius: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--dmc-green);
+}
+
+.dmc-one-brand {
+  position: relative;
+  min-height: 104px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(251, 234, 224, 0.95), rgba(255, 255, 255, 0.96) 46%, rgba(253, 236, 210, 0.55)),
+    #ffffff;
+}
+
+.dmc-one-brand::before {
+  content: "";
+  position: absolute;
+  inset: -60% auto -60% -45%;
+  width: 62%;
+  background: linear-gradient(100deg, transparent, rgba(201, 150, 74, 0.28), transparent);
+  transform: rotate(14deg);
+  animation: dmc-brand-sheen 5.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.dmc-one-logo-frame {
+  /* The logo image is a fully self-contained mark (its own white fill +
+     navy/red compass) - no card/shadow/gradient backdrop behind it, or it
+     reads as a rounded-rect card nested around the mark, which fights its
+     own shape. Just a subtle float to match the rest of the brand block's
+     motion. */
+  animation: dmc-logo-float 4.8s ease-in-out infinite;
+}
+
+.dmc-one-title {
+  color: var(--dmc-ink);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.dmc-one-subtitle {
+  color: var(--dmc-green-dark);
+  background: rgba(253, 236, 210, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(240, 215, 199, 0.9);
+}
+
+@keyframes dmc-brand-sheen {
+  0%, 58% {
+    transform: translateX(0) rotate(14deg);
+    opacity: 0;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(310%) rotate(14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes dmc-logo-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmc-one-brand::before,
+  .dmc-one-logo-frame {
+    animation: none;
+  }
+}
+
+
+/* ---- Global List / Card view (see components/layout/ViewModeToggle.tsx) ----
+   data-view on <main data-view-root>: "" = each page as designed, "list" = compact rows, "card" = cards. */
+main[data-view="card"] table:not([data-no-card]) { display: block; width: 100%; min-width: 0 !important; }
+main[data-view="card"] table:not([data-no-card]) thead { display: none; }
+main[data-view="card"] table:not([data-no-card]) tbody { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+main[data-view="card"] table:not([data-no-card]) tbody tr { display: block; border: 1px solid #e5e7eb; border-radius: .5rem; background: #fff; padding: .6rem .8rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+main[data-view="card"] table:not([data-no-card]) tbody td { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; padding: .2rem 0 !important; border: 0 !important; text-align: right; white-space: normal !important; }
+main[data-view="card"] table:not([data-no-card]) tbody td[data-label]:not([data-label=""])::before { content: attr(data-label); flex: none; max-width: 45%; text-align: left; font-size: .7rem; font-weight: 600; text-transform: uppercase; color: #6b7280; }
+main[data-view="card"] table:not([data-no-card]) tbody td[colspan] { display: block; text-align: center; }
+main[data-view="card"] table:not([data-no-card]) tfoot { display: none; }
+
+main[data-view="list"] article[data-record-card] { padding: .4rem .75rem; }
+main[data-view="list"] article[data-record-card] > div { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+main[data-view="list"] article[data-record-card] > div > div:first-child { flex: 1 1 320px; align-items: center; }
+main[data-view="list"] article[data-record-card] [data-rc="meta"],
+main[data-view="list"] article[data-record-card] [data-rc="stats"] { display: flex; flex-wrap: wrap; gap: .2rem 1rem; margin-top: .2rem; }
+main[data-view="list"] article[data-record-card] [data-rc="stats"] > div { background: transparent; padding: 0; display: flex; gap: .35rem; }
+main[data-view="list"] article[data-record-card] [data-rc="actions"] { margin-left: auto; }
+main[data-view="list"] [data-record-list] { gap: .35rem; }
+
+/* Global click-to-sort headers (see components/layout/TableSorting.tsx) */
+th[data-sortable="1"] { cursor: pointer; user-select: none; }
+th[data-sortable="1"]:hover { color: #374151; }
+th[data-sortable="1"]::after { content: " \2195"; opacity: .3; font-size: .85em; }
+th[data-sortable="1"][data-sort-dir="asc"]::after { content: " \25B2"; opacity: .9; }
+th[data-sortable="1"][data-sort-dir="desc"]::after { content: " \25BC"; opacity: .9; }
+
+/* ═══════════ Go Abroad Migration brand (logo bronze + charcoal) ═══════════ */
+/* Every blue-* utility in the app resolves to the logo's bronze scale. */
+@theme {
+  --color-blue-50: #FBF8F2;
+  --color-blue-100: #F6EDDC;
+  --color-blue-200: #EBD9B0;
+  --color-blue-300: #DDBF82;
+  --color-blue-400: #C9964A;
+  --color-blue-500: #B8873A;
+  --color-blue-600: #9A6A2B;
+  --color-blue-700: #7A5424;
+  --color-blue-800: #6B4518;
+  --color-blue-900: #4A2F10;
+  --color-blue-950: #2E1C08;
+}
+
+:root { color-scheme: light; --gam-gold-gradient: linear-gradient(135deg, #7A5424 0%, #C9964A 45%, #E6C078 70%, #9A6A2B 100%); }
+
+/* Logo pair: the dark-text logo on light surfaces, the white-text logo on dark ones. */
+.gam-logo-dark-variant { display: none; }
+:root[data-theme="dark"] .gam-logo-light-variant { display: none; }
+:root[data-theme="dark"] .gam-logo-dark-variant { display: block; }
+
+/* ═══════════ Dark theme (opt-in via the toggle; light is the default) ═══════════ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --dmc-green: #C9964A;
+  --dmc-green-dark: #E6C078;
+  --dmc-green-medium: #B8873A;
+  --dmc-green-light: #D9B26A;
+  --dmc-green-soft: #2A2218;
+  --dmc-green-softer: #14110E;
+  --dmc-ink: #F1EBDD;
+  --dmc-muted: #A99C86;
+  --dmc-border: #3A3128;
+  --dmc-surface: #1C1813;
+  --dmc-gold-soft: #3A2D18;
+  --background: #0F0D0B;
+  --foreground: #F1EBDD;
+  --primary-foreground: #1A1612;
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.45), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.45), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.55), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+}
+:root[data-theme="dark"] body { background: var(--background); color: var(--foreground); }
+:root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/95,
+:root[data-theme="dark"] .bg-white\/90 { background-color: var(--dmc-surface); }
+:root[data-theme="dark"] .bg-gray-50,
+:root[data-theme="dark"] .bg-gray-100,
+:root[data-theme="dark"] .bg-slate-50,
+:root[data-theme="dark"] .bg-slate-100,
+:root[data-theme="dark"] .bg-\[\#FBF8F2\],
+:root[data-theme="dark"] .bg-\[\#F6EDDC\] { background-color: #241F18; }
+:root[data-theme="dark"] .bg-blue-50,
+:root[data-theme="dark"] .bg-blue-100 { background-color: #2A2218; }
+:root[data-theme="dark"] .text-gray-900,
+:root[data-theme="dark"] .text-gray-800,
+:root[data-theme="dark"] .text-gray-700,
+:root[data-theme="dark"] .text-slate-900,
+:root[data-theme="dark"] .text-slate-800,
+:root[data-theme="dark"] .text-slate-700 { color: var(--dmc-ink); }
+:root[data-theme="dark"] .text-gray-600,
+:root[data-theme="dark"] .text-gray-500,
+:root[data-theme="dark"] .text-gray-400,
+:root[data-theme="dark"] .text-slate-600,
+:root[data-theme="dark"] .text-slate-500 { color: var(--dmc-muted); }
+:root[data-theme="dark"] .text-blue-600,
+:root[data-theme="dark"] .text-blue-700,
+:root[data-theme="dark"] .text-blue-800 { color: #E6C078; }
+:root[data-theme="dark"] .border-gray-100,
+:root[data-theme="dark"] .border-gray-200,
+:root[data-theme="dark"] .border-gray-300,
+:root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-slate-300 { border-color: var(--dmc-border); }
+:root[data-theme="dark"] .divide-gray-200 > :not(:last-child),
+:root[data-theme="dark"] .divide-gray-100 > :not(:last-child) { border-color: var(--dmc-border); }
+:root[data-theme="dark"] .hover\:bg-gray-50:hover,
+:root[data-theme="dark"] .hover\:bg-gray-100:hover,
+:root[data-theme="dark"] .hover\:bg-\[\#F6EDDC\]:hover { background-color: #2A2218; }
+:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea { background-color: #241F18; color: var(--dmc-ink); border-color: var(--dmc-border); }
+:root[data-theme="dark"] ::placeholder { color: #7D7160; }
+:root[data-theme="dark"] ::selection { background: rgba(201, 150, 74, 0.35); }
+
+/* ═══════════ Login screen ═══════════ */
+.gam-login-aurora { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.gam-login-aurora i { position: absolute; border-radius: 9999px; filter: blur(80px); will-change: transform; }
+.gam-login-aurora i:nth-child(1) { width: 38rem; height: 38rem; left: -12rem; top: -14rem; background: radial-gradient(circle, rgba(201,150,74,.55), transparent 65%); animation: gam-drift 22s ease-in-out infinite alternate; }
+.gam-login-aurora i:nth-child(2) { width: 30rem; height: 30rem; right: -10rem; bottom: -12rem; background: radial-gradient(circle, rgba(154,106,43,.35), transparent 65%); animation: gam-drift 28s ease-in-out infinite alternate-reverse; }
+@keyframes gam-drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(5%,4%,0) scale(1.15); } }
+.gam-login-grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(201,150,74,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(201,150,74,.09) 1px, transparent 1px); background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse at 30% 40%, #000 15%, transparent 70%); mask-image: radial-gradient(ellipse at 30% 40%, #000 15%, transparent 70%); }
+.gam-shimmer-text { background: linear-gradient(100deg, #B8873A 10%, #F1D79A 40%, #E6C078 55%, #B8873A 90%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: gam-shimmer 5s linear infinite; }
+@keyframes gam-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.gam-orbit { position: absolute; right: -100px; bottom: -120px; width: 340px; height: 340px; opacity: .6; pointer-events: none; }
+.gam-orbit i { position: absolute; inset: 0; border-radius: 50%; border: 1px dashed rgba(230,192,120,.35); animation: gam-spin 44s linear infinite; }
+.gam-orbit i:nth-child(2) { inset: 40px; animation-duration: 30s; animation-direction: reverse; }
+.gam-orbit i:nth-child(3) { inset: 80px; animation-duration: 22s; }
+@keyframes gam-spin { to { transform: rotate(360deg); } }
+.gam-journey-line i { display: block; height: 100%; width: 40%; background: var(--gam-gold-gradient); animation: gam-travel 6.4s ease-in-out infinite; }
+@keyframes gam-travel { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+.gam-journey-dot { animation: gam-pulse 6.4s ease-in-out infinite; }
+@keyframes gam-pulse { 0%, 22%, 100% { box-shadow: 0 0 0 0 rgba(201,150,74,0); } 8% { box-shadow: 0 0 0 8px rgba(201,150,74,.22); } }
+.gam-submit-btn { background: var(--gam-gold-gradient); background-size: 200% 100%; transition: background-position .5s ease, transform .2s ease, box-shadow .2s ease; }
+.gam-submit-btn:hover:not(:disabled) { background-position: 100% 0; transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .gam-login-aurora i, .gam-shimmer-text, .gam-orbit i, .gam-journey-line i, .gam-journey-dot { animation: none !important; }
+}

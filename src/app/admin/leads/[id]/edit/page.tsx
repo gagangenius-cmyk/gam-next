@@ -1,5 +1,6 @@
 'use client';
 
+import RedFlagPanel from '@/components/leads/RedFlagPanel';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Mail, Phone, User, MapPin, UserCircle2, Tag, GraduationCap, UserCog, CalendarClock, SlidersHorizontal, Flag, ArrowLeft } from 'lucide-react';
@@ -523,6 +524,8 @@ export default function AdminEditLeadPage() {
         onBack={() => router.push('/admin/leads')}
         badge={<span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">Lead #{leadId}</span>}
       />
+
+      <RedFlagPanel leadId={leadId} canClear={canEditAssignment} />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <FormSection icon={User} title="Lead Information" description="Name and how to reach this person">

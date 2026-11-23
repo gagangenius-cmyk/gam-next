@@ -144,7 +144,7 @@ export default function ContractGeneratorPage() {
         serviceType: '',
         serviceDescription: '',
         serviceFee: '',
-        currency: 'CAD',
+        currency: 'AED',
         paymentTerms: '',
         duration: '',
         startDate: '',

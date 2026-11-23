@@ -1454,7 +1454,7 @@ export default function LeadManagement({ onLeadSelect, onConvertToOpportunity, s
       vatGstPercent: branchDetails.vatGstPercent,
       paymentMethod: qp.method,
       transactionId: qp.txnId,
-      currency: currencyCode || 'CAD',
+      currency: currencyCode || 'AED',
       totalAmount: lead.payTotal,
       previouslyPaid: lead.paidYet,
       paidAmount: qp.amount,

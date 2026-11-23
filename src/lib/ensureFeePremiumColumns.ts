@@ -12,10 +12,10 @@ export const ensureFeePremiumColumns = async () => {
       const [rows] = await sequelize.query(`
         SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_fee'
-          AND COLUMN_NAME IN ('premium_fee_1', 'premium_fee_2')
+          AND COLUMN_NAME IN ('premium_fee_1', 'premium_fee_2', 'government_fee')
       `);
       const existing = new Set(((rows as Array<{ COLUMN_NAME: string }>) || []).map((r) => r.COLUMN_NAME));
-      for (const column of ['premium_fee_1', 'premium_fee_2']) {
+      for (const column of ['premium_fee_1', 'premium_fee_2', 'government_fee']) {
         if (!existing.has(column)) {
           await sequelize.query(`ALTER TABLE crm_fee ADD COLUMN ${column} DECIMAL(10,2) NOT NULL DEFAULT 0.00`);
         }

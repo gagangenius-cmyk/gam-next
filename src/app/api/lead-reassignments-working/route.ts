@@ -101,6 +101,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // A transfer request only needs the lead and the two people: the status snapshot comes from the lead itself and
+    // the requester from the session, so a lead whose status is blank (or a stale client payload) no longer makes the
+    // request fail with "Missing required field".
+    body.createdBy = auth.id;
+    body.reassignmentType = body.reassignmentType || 'transfer';
+    if (body.leadId && (!body.previousStatus || !body.newStatus)) {
+      const [statusRows] = await sequelize.query('SELECT status FROM crm_forum_leads WHERE id = ? LIMIT 1', { replacements: [body.leadId] });
+      const currentStatus = String((statusRows as Array<{ status?: string | null }>)[0]?.status || '').trim() || 'New';
+      body.previousStatus = body.previousStatus || currentStatus;
+      body.newStatus = body.newStatus || body.previousStatus;
+    }
+
     // Validate required fields
     const requiredFields = ['leadId', 'fromEmployeeId', 'toEmployeeId', 'reassignmentType', 'reason', 'previousStatus', 'newStatus', 'createdBy'];
     for (const field of requiredFields) {

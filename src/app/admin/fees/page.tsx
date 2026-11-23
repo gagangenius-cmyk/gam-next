@@ -408,6 +408,7 @@ export default function FeesManagement() {
                   <h4 className="font-semibold text-gray-700 mb-2">Premium Fees</h4>
                   <div className="space-y-1.5">
                     <p><span className="font-medium">Premium Fee 1:</span> {selectedFee.premium_fee_1 || 0}</p>
+                    <p><span className="font-medium">Government Fees:</span> {selectedFee.government_fee || 0}</p>
                     <p><span className="font-medium">Premium Fee 2:</span> {selectedFee.premium_fee_2 || 0}</p>
                   </div>
                 </div>
@@ -497,6 +498,7 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
     prof_fee_stage: initialData?.prof_fee_stage ?? 0,
     premium_fee_1: initialData?.premium_fee_1 ?? 0,
     premium_fee_2: initialData?.premium_fee_2 ?? 0,
+    government_fee: initialData?.government_fee ?? 0,
     status: initialData?.status ?? 1,
   });
 
@@ -681,6 +683,14 @@ function FeeFormModal({ title, initialData, lookup, onSubmit, onClose }: FeeForm
                 </div>
               </>
             )}
+
+            <div>
+              <label className={lbl}>Government Fees</label>
+              <input type="number" step="0.01" min="0" value={formData.government_fee}
+                onChange={e => setFormData(prev => ({ ...prev, government_fee: parseFloat(e.target.value) || 0 }))}
+                className={inp} />
+              <p className="mt-1 text-xs text-gray-500">Added as its own line in every package's quotation.</p>
+            </div>
 
             {hasType('premium') && (
               <>

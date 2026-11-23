@@ -8,7 +8,7 @@ import { Lead } from '@/types/lead';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeadStatuses } from '@/hooks/useLeadStatuses';
 import { isCeo, isBranchManagerOrCeo } from '@/lib/roleChecks';
-import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS } from '@/lib/paymentOptions';
+import { BANK_PAYMENT_OPTIONS, CARD_PAYMENT_OPTIONS, surchargeSettingKey } from '@/lib/paymentOptions';
 import { renderAgreementForBranch } from '@/lib/renderAgreementForBranch';
 import { uploadFileToBlob } from '@/lib/uploadToBlob';
 import { getBranchTaxInfo } from '@/lib/branchTax';
@@ -206,6 +206,7 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     prof_fee_stage: number;
     premium_fee_1: number;
     premium_fee_2: number;
+    government_fee?: number;
   }
   const [feeData, setFeeData] = useState<FeeRecord | null>(null);
   const [feeLoading, setFeeLoading] = useState(false);
@@ -519,7 +520,10 @@ export default function OpportunityFlowWizard({ leadId, initialStage, initialOpp
     const stageTotal    = Number(fee.firstStage) + Number(fee.secondStage) + Number(fee.thirdStage) + Number(fee.forthStage) + Number(fee.fifthStage);
     // Premium package: two 50/50 installments (crm_fee.premium_fee_1 + premium_fee_2).
     const premiumTotal  = Number(fee.premium_fee_1 || 0) + Number(fee.premium_fee_2 || 0);
-    return { upfrontTotal, monthlyTotal, stageTotal, premiumTotal };
+    // Government fees ride on top of every package that has a base fee (they are their own quotation line).
+    const govt = Number(fee.government_fee || 0);
+    const withGovt = (base: number) => (base > 0 ? base + govt : 0);
+    return { upfrontTotal: withGovt(upfrontTotal), monthlyTotal: withGovt(monthlyTotal), stageTotal: withGovt(stageTotal), premiumTotal: withGovt(premiumTotal), govt };
   };
 
   // ── Auto-fetch fee: service + country from lead (branch as enhancement; falls back without it) ──
@@ -2433,6 +2437,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
             total: upfrontTotal,
             rows: [
               { label: 'Upfront Fee', amount: Number(feeData.upfront) },
+              { label: 'Government Fees', amount: Number(feeData.upfront) > 0 ? Number(feeData.government_fee || 0) : 0 },
             ].filter(r => r.amount > 0),
             include: upfrontTotal > 0,
           },
@@ -2446,6 +2451,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
               { label: 'Stage 3', amount: Number(feeData.thirdStage) },
               { label: 'Stage 4', amount: Number(feeData.forthStage) },
               { label: 'Stage 5', amount: Number(feeData.fifthStage) },
+              { label: 'Government Fees', amount: stageExtra > 0 ? Number(feeData.government_fee || 0) : 0 },
             ].filter(r => r.amount > 0),
             include: stageExtra > 0,
           },
@@ -2457,6 +2463,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
               { label: 'Month 1', amount: Number(feeData.firstMonth) },
               { label: 'Month 2', amount: Number(feeData.secondMonth) },
               { label: 'Month 3', amount: Number(feeData.thirdMonth) },
+              { label: 'Government Fees', amount: monthlyExtra > 0 ? Number(feeData.government_fee || 0) : 0 },
             ].filter(r => r.amount > 0),
             include: monthlyExtra > 0,
           },
@@ -2467,6 +2474,7 @@ function ProspectStage({ lead, data, setData, onLeadUpdated, onSaveProspect, onN
             rows: [
               { label: 'Premium Fee 1 (50%)', amount: Number(feeData.premium_fee_1 || 0) },
               { label: 'Premium Fee 2 (50%)', amount: Number(feeData.premium_fee_2 || 0) },
+              { label: 'Government Fees', amount: premiumTotal > 0 ? Number(feeData.government_fee || 0) : 0 },
             ].filter(r => r.amount > 0),
             include: premiumTotal > 0,
           },
@@ -2625,7 +2633,10 @@ function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionDat
     const premiumTotal = Number(fee.premium_fee_1 || 0) + Number(fee.premium_fee_2 || 0);
     const total = type === 'upfront' ? upfrontBase : type === 'monthly' ? monthlyExtra : type === 'premium' ? premiumTotal : stageExtra;
     if (total <= 0) return [];
-    return [{ description: fee.serviceName || 'Program Fee', quantity: 1, unitPrice: String(total), total: String(total) }];
+    const items = [{ description: fee.serviceName || 'Program Fee', quantity: 1, unitPrice: String(total), total: String(total) }];
+    const govt = Number(fee.government_fee || 0);
+    if (govt > 0) items.push({ description: 'Government Fees', quantity: 1, unitPrice: String(govt), total: String(govt) });
+    return items;
   };
 
   // ── Auto-populate line items when fee data or payment type changes ──
@@ -2968,6 +2979,15 @@ function QuotationStage({ lead, data, setData, feeData, feeLoading, retentionDat
 }
 
 function PaymentStage({ lead, data, setData, quotationTotal, quotationTax, quotationDiscount, opportunityId, onEnsureOpportunity, discountPending, discountStatus, onRefreshDiscount, onNext, onPrevious }: any) {
+  // Gateway surcharge percentages come from the CEO's CRM Controls, never hard-coded.
+  const [surcharges, setSurcharges] = useState<Record<string, string>>({});
+  const [payExtra, setPayExtra] = useState(false);
+  useEffect(() => {
+    fetch('/api/admin/app-settings').then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.settings) setSurcharges(j.settings); }).catch(() => {});
+  }, []);
+  const surchargeKey = surchargeSettingKey(data.paymentMethod);
+  const surchargePercent = surchargeKey ? Number(surcharges[surchargeKey]) || 0 : 0;
+  const surchargeAmount = payExtra && surchargePercent > 0 ? Math.round(((Number(data.paidAmount) || 0) * surchargePercent) / 100 * 100) / 100 : 0;
   const { user, currencyCode } = useAuth();
   const [saving, setSaving] = useState(false);
   const [receipt, setReceipt] = useState<any>(null);
@@ -3326,6 +3346,17 @@ function PaymentStage({ lead, data, setData, quotationTotal, quotationTax, quota
                   ))}
                 </optgroup>
               </SearchableSelect>
+              {surchargeKey && surchargePercent > 0 && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={payExtra} onChange={(e) => setPayExtra(e.target.checked)} disabled={receiptLocked} />
+                    Client pays the {surchargePercent}% {data.paymentMethod} charge on top
+                  </label>
+                  {payExtra && (
+                    <p className="mt-1">Collect an extra <strong>{currencyCode} {surchargeAmount.toFixed(2)}</strong> ({surchargePercent}% of {currencyCode} {(Number(data.paidAmount) || 0).toFixed(2)}) &mdash; total to charge <strong>{currencyCode} {((Number(data.paidAmount) || 0) + surchargeAmount).toFixed(2)}</strong>. The charge is not part of the program fee or the receipt amount.</p>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Transaction ID</label>

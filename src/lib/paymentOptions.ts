@@ -21,4 +21,17 @@ export const CARD_PAYMENT_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'Razr', label: 'Razr' },
   { value: 'Payu', label: 'Payu' },
   { value: 'Paypal', label: 'Paypal' },
+  { value: 'Payment Link', label: 'Payment Link' },
+  { value: 'Tabby', label: 'Tabby' },
+  { value: 'Tamara', label: 'Tamara' },
 ];
+
+// Which CEO-set surcharge (Settings > CRM Controls) applies to a payment method, or null when none does.
+export function surchargeSettingKey(method: string | null | undefined): 'payments.surcharge.payment_link' | 'payments.surcharge.pos' | 'payments.surcharge.tabby' | 'payments.surcharge.tamara' | null {
+  const m = String(method || '').trim().toLowerCase();
+  if (m === 'pos machine' || m === 'pos') return 'payments.surcharge.pos';
+  if (m === 'tabby') return 'payments.surcharge.tabby';
+  if (m === 'tamara') return 'payments.surcharge.tamara';
+  if (m === 'payment link' || m === 'tap' || m === 'credit_card') return 'payments.surcharge.payment_link';
+  return null;
+}

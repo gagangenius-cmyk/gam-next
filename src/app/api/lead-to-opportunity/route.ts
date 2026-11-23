@@ -1560,7 +1560,7 @@ async function resolveFeePackageTotals(
     const rows = await sequelize.query<any>(
       `SELECT f.upfront, f.prof_fee, f.firstMonth, f.secondMonth, f.thirdMonth, f.prof_fee_month,
               f.firstStage, f.secondStage, f.thirdStage, f.forthStage, f.fifthStage, f.prof_fee_stage,
-              f.premium_fee_1, f.premium_fee_2
+              f.premium_fee_1, f.premium_fee_2, f.government_fee
        FROM crm_fee f
        WHERE ${conditions.join(' AND ')}
        ORDER BY f.id DESC
@@ -1575,12 +1575,15 @@ async function resolveFeePackageTotals(
 
   const n = (v: unknown) => Number(v || 0);
   const base = n(fee.upfront);
+  // Government fees are charged on top of every package that has a base fee.
+  const govt = n(fee.government_fee);
+  const withGovt = (amount: number) => (amount > 0 ? amount + govt : 0);
   return {
-    upfront: base,
-    stage: n(fee.firstStage) + n(fee.secondStage) + n(fee.thirdStage) + n(fee.forthStage) + n(fee.fifthStage),
-    monthly: n(fee.firstMonth) + n(fee.secondMonth) + n(fee.thirdMonth),
+    upfront: withGovt(base),
+    stage: withGovt(n(fee.firstStage) + n(fee.secondStage) + n(fee.thirdStage) + n(fee.forthStage) + n(fee.fifthStage)),
+    monthly: withGovt(n(fee.firstMonth) + n(fee.secondMonth) + n(fee.thirdMonth)),
     // Premium is paid as two 50/50 installments; the package is their sum.
-    premium: n(fee.premium_fee_1) + n(fee.premium_fee_2),
+    premium: withGovt(n(fee.premium_fee_1) + n(fee.premium_fee_2)),
   };
 }
 

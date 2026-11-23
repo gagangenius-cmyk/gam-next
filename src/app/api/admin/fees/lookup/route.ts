@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         f.upfront, f.prof_fee,
         f.firstMonth, f.secondMonth, f.thirdMonth, f.prof_fee_month,
         f.firstStage, f.secondStage, f.thirdStage, f.forthStage, f.fifthStage, f.prof_fee_stage,
-        f.premium_fee_1, f.premium_fee_2,
+        f.premium_fee_1, f.premium_fee_2, f.government_fee,
         c.currency_code AS currencyCode,
         s.name          AS serviceName,
         co.name         AS countryName,

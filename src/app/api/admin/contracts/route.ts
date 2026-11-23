@@ -440,6 +440,13 @@ export async function GET(request: NextRequest) {
       else if (status === 'draft') conditions.push(`(c.contract IS NULL OR c.contract = '')`);
     }
 
+    // Optional created-date window (custom date range).
+    const isoDay = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const dateFrom = isoDay(searchParams.get('dateFrom'));
+    const dateTo = isoDay(searchParams.get('dateTo'));
+    if (dateFrom) { conditions.push('COALESCE(l.created, l.regdate) >= :dateFrom'); replacements.dateFrom = `${dateFrom} 00:00:00`; }
+    if (dateTo) { conditions.push('COALESCE(l.created, l.regdate) <= :dateTo'); replacements.dateTo = `${dateTo} 23:59:59`; }
+
     const where = conditions.join(' AND ');
     const rows = await sequelize.query<{
       id: number; leadId: number; lead_fname: string; lead_lname: string;

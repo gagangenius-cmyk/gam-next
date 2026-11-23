@@ -19,7 +19,9 @@ export type LeadRemarkAction =
   | 'duplicate_detected'
   | 'operations_case_transfer'
   | 'operations_case_status_changed'
-  | 'operations_task_reassigned';
+  | 'operations_task_reassigned'
+  | 'red_flag_raised'
+  | 'red_flag_cleared';
 
 interface LogLeadRemarkInput {
   leadId: number;

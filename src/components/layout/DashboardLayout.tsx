@@ -200,6 +200,7 @@ const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
       title: 'Reports',
       items: [
         { name: 'Reports Panel', href: '/admin/reports/panel', icon: BarChart3, permission: 'reports.view' },
+        { name: 'Custom Report Generator', href: '/admin/reports/generator', icon: BarChart3, permission: 'reports.view' },
         { name: 'Leads Quality Report', href: MARKETING_DASHBOARD_PATH, icon: BarChart3, permission: 'marketing.leads_dashboard' },
         { name: 'Lead Reports', href: '/admin/reports/lead-status', icon: Users, permission: 'reports.view' },
         { name: 'Lead Source Analytics', href: '/admin/reports/lead-source-analytics', icon: TrendingUp, permission: 'reports.view' },

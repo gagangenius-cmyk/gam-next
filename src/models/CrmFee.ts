@@ -20,10 +20,12 @@ interface CrmFeeAttributes {
   prof_fee_stage: number;
   premium_fee_1: number;
   premium_fee_2: number;
+  // Government / visa-authority fees charged on top of our professional fee.
+  government_fee: number;
   status: number;
 }
 
-interface CrmFeeCreationAttributes extends Optional<CrmFeeAttributes, 'service' | 'country' | 'branch' | 'currency' | 'upfront' | 'prof_fee' | 'firstMonth' | 'secondMonth' | 'thirdMonth' | 'prof_fee_month' | 'firstStage' | 'secondStage' | 'thirdStage' | 'forthStage' | 'prof_fee_stage' | 'premium_fee_1' | 'premium_fee_2' | 'status'> {}
+interface CrmFeeCreationAttributes extends Optional<CrmFeeAttributes, 'service' | 'country' | 'branch' | 'currency' | 'upfront' | 'prof_fee' | 'firstMonth' | 'secondMonth' | 'thirdMonth' | 'prof_fee_month' | 'firstStage' | 'secondStage' | 'thirdStage' | 'forthStage' | 'prof_fee_stage' | 'premium_fee_1' | 'premium_fee_2' | 'government_fee' | 'status'> {}
 
 class CrmFee extends Model<CrmFeeAttributes, CrmFeeCreationAttributes> implements CrmFeeAttributes {
   declare id: number;
@@ -45,6 +47,7 @@ class CrmFee extends Model<CrmFeeAttributes, CrmFeeCreationAttributes> implement
   declare prof_fee_stage: number;
   declare premium_fee_1: number;
   declare premium_fee_2: number;
+  declare government_fee: number;
   declare status: number;
 
   public static associate(models: any) {
@@ -144,6 +147,11 @@ CrmFee.init(
       defaultValue: 0.00
     },
     premium_fee_2: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: false,
+      defaultValue: 0.00
+    },
+    government_fee: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false,
       defaultValue: 0.00

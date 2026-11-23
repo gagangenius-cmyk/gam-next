@@ -1,3 +1,4 @@
+import { provisionEnabledMfa } from '@/lib/mfa';
 import { NextRequest, NextResponse } from 'next/server';
 import { QueryTypes } from 'sequelize';
 import { sequelize, connectDB } from '@/lib/sequelize';
@@ -118,7 +119,16 @@ export async function POST(request: NextRequest) {
       if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: 403 });
     }
     const employee = await HRService.createEmployee(body);
-    return NextResponse.json(employee, { status: 201 });
+    // Optional login OTP, switched on while adding the employee: returned once so it can be given to them.
+    let otp: { secret: string; otpauthUrl: string; backupCodes: string[] } | undefined;
+    if (body.enableOtp) {
+      const created = employee as unknown as { id?: number; email?: string; cemail?: string; name?: string };
+      if (created?.id) {
+        otp = await provisionEnabledMfa(Number(created.id), created.cemail || created.email || created.name || `employee-${created.id}`);
+      }
+    }
+    const plain = typeof (employee as { toJSON?: () => unknown })?.toJSON === 'function' ? (employee as unknown as { toJSON: () => object }).toJSON() : employee;
+    return NextResponse.json(otp ? { ...plain, otp } : employee, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create employee';
     console.error('Error creating employee:', error);

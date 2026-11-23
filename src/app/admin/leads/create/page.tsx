@@ -489,7 +489,11 @@ export default function AdminCreateLeadPage() {
   };
 
   const handleRequestTransfer = async () => {
-    if (!duplicateInfo?.ownerId || !user) return;
+    if (!user) return;
+    if (!duplicateInfo?.ownerId) {
+      window.toast.error('This lead has no current owner to transfer from. Ask your Branch Manager or FOE to assign it to you.');
+      return;
+    }
     setTransferSubmitting(true);
     try {
       const res = await fetch('/api/lead-reassignments-working', {
@@ -501,8 +505,8 @@ export default function AdminCreateLeadPage() {
           toEmployeeId: user.id,
           reassignmentType: 'transfer',
           reason: transferReason.trim() || `${user.name || 'A counselor'} re-enquired on this lead and is requesting ownership.`,
-          previousStatus: duplicateInfo.status,
-          newStatus: duplicateInfo.status,
+          previousStatus: duplicateInfo.status || 'New',
+          newStatus: duplicateInfo.status || 'New',
           createdBy: user.id,
         }),
       });

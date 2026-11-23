@@ -41,6 +41,8 @@ export default function EmployeesManagement() {
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  // Login OTP issued while adding an employee - shown once so it can be handed over.
+  const [otpInfo, setOtpInfo] = useState<{ name: string; secret: string; otpauthUrl: string; backupCodes: string[] } | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -201,7 +203,9 @@ export default function EmployeesManagement() {
         body: JSON.stringify(data),
       });
       if (response.ok) {
+        const created = await response.json().catch(() => null);
         setShowAddModal(false);
+        if (created?.otp) setOtpInfo({ name: created.name || (data as { name?: string }).name || 'Employee', ...created.otp });
         fetchEmployees();
       } else {
         const result = await response.json();
@@ -572,6 +576,23 @@ export default function EmployeesManagement() {
         </div>
       )}
 
+      {otpInfo && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Login OTP issued">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Login OTP set up for {otpInfo.name}</h3>
+            <p className="mt-1 text-sm text-gray-600">Give these to the employee now. They are shown only once. The employee adds the key to an authenticator app (Google Authenticator, Microsoft Authenticator) and enters the 6-digit code at every sign-in.</p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div><dt className="font-medium text-gray-700">Setup key</dt><dd className="mt-1 break-all rounded bg-gray-50 p-2 font-mono">{otpInfo.secret}</dd></div>
+              <div><dt className="font-medium text-gray-700">Setup link (opens in an authenticator app)</dt><dd className="mt-1 break-all rounded bg-gray-50 p-2 font-mono text-xs">{otpInfo.otpauthUrl}</dd></div>
+              <div><dt className="font-medium text-gray-700">One-time backup codes</dt><dd className="mt-1 grid grid-cols-2 gap-1 rounded bg-gray-50 p-2 font-mono">{otpInfo.backupCodes.map((c) => <span key={c}>{c}</span>)}</dd></div>
+            </dl>
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={() => setOtpInfo(null)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">I have shared these</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Employee Drawer */}
       <EmployeeFormDrawer
         open={showAddModal}
@@ -650,10 +671,12 @@ function buildEmployeeFormData(initialData?: EmployeeRow | null) {
 function EmployeeFormDrawer({ open, title, initialData, roles, branches, regions, departments, onSubmit, onClose }: EmployeeFormModalProps) {
   const [formData, setFormData] = useState(() => buildEmployeeFormData(initialData));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [enableOtp, setEnableOtp] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setFormData(buildEmployeeFormData(initialData));
+    setEnableOtp(false);
   }, [open, initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -665,7 +688,8 @@ function EmployeeFormDrawer({ open, title, initialData, roles, branches, regions
         ...formData,
         dob: formData.dob ? new Date(formData.dob) : null,
         doj: formData.doj ? new Date(formData.doj) : null,
-      };
+        ...(!initialData && enableOtp ? { enableOtp: true } : {}),
+      } as Partial<CrmEmployeeAttributes>;
       await onSubmit(payload);
     } finally {
       setIsSubmitting(false);
@@ -838,6 +862,13 @@ function EmployeeFormDrawer({ open, title, initialData, roles, branches, regions
             />
           </div>
         </div>
+
+        {!initialData && (
+          <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+            <input type="checkbox" checked={enableOtp} onChange={(e) => setEnableOtp(e.target.checked)} className="mt-0.5" />
+            <span><strong>Require an OTP at login</strong><br />Sets up an authenticator-app code for this employee. The setup key is shown once after saving.</span>
+          </label>
+        )}
 
         <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
           <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">

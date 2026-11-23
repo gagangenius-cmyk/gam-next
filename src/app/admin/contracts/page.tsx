@@ -59,6 +59,9 @@ export default function ContractsPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'month' | 'custom'>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [page, setPage] = useState(1);
 
   const fetchContracts = useCallback(async () => {
@@ -68,6 +71,12 @@ export default function ContractsPage() {
       const params = new URLSearchParams({ page: String(page), limit: '50' });
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
+      const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+      if (datePreset === 'today') { params.set('dateFrom', day(0)); params.set('dateTo', day(0)); }
+      else if (datePreset === '7d') { params.set('dateFrom', day(-6)); params.set('dateTo', day(0)); }
+      else if (datePreset === '30d') { params.set('dateFrom', day(-29)); params.set('dateTo', day(0)); }
+      else if (datePreset === 'month') { params.set('dateFrom', `${day(0).slice(0, 8)}01`); params.set('dateTo', day(0)); }
+      else if (datePreset === 'custom') { if (customFrom) params.set('dateFrom', customFrom); if (customTo) params.set('dateTo', customTo); }
 
       const res = await fetch(`/api/admin/contracts?${params}`);
       if (!res.ok) throw new Error(await res.text());
@@ -79,7 +88,7 @@ export default function ContractsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, datePreset, customFrom, customTo]);
 
   useEffect(() => { fetchContracts(); }, [fetchContracts]);
 
@@ -142,8 +151,27 @@ export default function ContractsPage() {
           <option value="pending">Pending</option>
           <option value="draft">Draft</option>
         </SearchableSelect>
-        {(search || statusFilter) && (
-          <button onClick={() => { setSearch(''); setStatusFilter(''); setPage(1); }} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 border border-gray-200 rounded-lg">
+        <select
+          aria-label="Created date"
+          value={datePreset}
+          onChange={e => { setDatePreset(e.target.value as typeof datePreset); setPage(1); }}
+          className="border border-gray-300 rounded-lg text-sm px-3 py-2"
+        >
+          <option value="all">Any date</option>
+          <option value="today">Today</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="month">This month</option>
+          <option value="custom">Custom dates</option>
+        </select>
+        {datePreset === 'custom' && (
+          <>
+            <input type="date" aria-label="From date" value={customFrom} max={customTo || undefined} onChange={e => { setCustomFrom(e.target.value); setPage(1); }} className="border border-gray-300 rounded-lg text-sm px-3 py-2" />
+            <input type="date" aria-label="To date" value={customTo} min={customFrom || undefined} onChange={e => { setCustomTo(e.target.value); setPage(1); }} className="border border-gray-300 rounded-lg text-sm px-3 py-2" />
+          </>
+        )}
+        {(search || statusFilter || datePreset !== 'all') && (
+          <button onClick={() => { setSearch(''); setStatusFilter(''); setDatePreset('all'); setCustomFrom(''); setCustomTo(''); setPage(1); }} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 border border-gray-200 rounded-lg">
             Clear
           </button>
         )}

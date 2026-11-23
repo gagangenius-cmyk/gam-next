@@ -153,3 +153,19 @@ export async function disableMfa(employeeId: number): Promise<void> {
   await ensureMfaTable();
   await sequelize.query(`DELETE FROM crm_employee_mfa WHERE employee_id = :employeeId`, { replacements: { employeeId } });
 }
+
+// Provisioning at employee-creation time: an admin adding an employee can switch the login OTP on straight away. The
+// secret and one-time backup codes are returned ONCE so they can be handed to the employee (scan the QR / type the key
+// into an authenticator app); nothing else can recover them afterwards.
+export async function provisionEnabledMfa(employeeId: number, accountName: string): Promise<{ secret: string; otpauthUrl: string; backupCodes: string[] }> {
+  const { secret, otpauthUrl } = await startEnrollment(employeeId, accountName);
+  const backupCodes = generateBackupCodes();
+  const hashedCodes = await Promise.all(backupCodes.map((plain) => bcrypt.hash(plain, 10)));
+  await sequelize.query(
+    `UPDATE crm_employee_mfa
+     SET enabled = 1, confirmed_at = NOW(), backup_codes_hashed = :codes
+     WHERE employee_id = :employeeId`,
+    { replacements: { employeeId, codes: JSON.stringify(hashedCodes) } }
+  );
+  return { secret, otpauthUrl, backupCodes };
+}
